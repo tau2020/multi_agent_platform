@@ -1,0 +1,41 @@
+# agents/agent_devops.py
+
+import os
+import json
+import sys
+import threading
+
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+class DevOpsAgent:
+    def __init__(self):
+        self.tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tasks')
+        self.lock = threading.Lock()
+
+    def deploy_task(self, task_id):
+        task_file = os.path.join(self.tasks_dir, f"{task_id}_task.json")
+        code_file = os.path.join(self.tasks_dir, f"{task_id}_code.py")
+        with self.lock:
+            if not os.path.exists(task_file) or not os.path.exists(code_file):
+                return f"DevOps: Task {task_id} not found or code not available."
+
+            with open(task_file, 'r') as f:
+                task = json.load(f)
+            if task['status'] != 'tested':
+                return f"DevOps: Task {task_id} status is '{task['status']}'. Skipping."
+
+            print(f"DevOps is deploying Task ID: {task_id}")
+            # Simulate deployment by copying the code to a 'deployed' directory
+            deployed_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deployed')
+            os.makedirs(deployed_dir, exist_ok=True)
+            deployed_file = os.path.join(deployed_dir, f"{task_id}_code.py")
+            with open(code_file, 'r') as src, open(deployed_file, 'w') as dst:
+                dst.write(src.read())
+
+            # Update task status
+            task['status'] = 'deployed'
+            with open(task_file, 'w') as f:
+                json.dump(task, f, indent=2)
+
+        return f"DevOps: Task {task_id} deployed."
