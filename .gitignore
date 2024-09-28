@@ -1,4 +1,9 @@
-# Byte-compiled / optimized / DLL files
+# Virtual environment
+myenv/
+venv/
+ENV/
+
+# Python byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,6 +25,7 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -35,34 +41,30 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/
+.nox/
 .coverage
 .coverage.*
 .cache
 nosetests.xml
 coverage.xml
 *.cover
+*.py,cover
 .hypothesis/
+.pytest_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# IPython
+profile_default/
+ipython_config.py
+
 # pyenv
 .python-version
-
-# celery beat schedule file
-celerybeat-schedule
-
-# SageMath parsed files
-*.sage.py
 
 # Environments
 .env
 .venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
 # Spyder project settings
 .spyderproject
@@ -76,12 +78,23 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+.dmypy.json
+dmypy.json
 
-# VS Code settings
-.vscode/
+# Pyre type checker
+.pyre/
 
-# PyCharm settings
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
 .idea/
 
-# Project-specific
+# VS Code
+.vscode/
+
+# Specific to your project
 multi_agent_env/
