@@ -106,3 +106,5 @@ multi_agent_env/
 
 #deployed folders
 deployed/
+
+tasks/

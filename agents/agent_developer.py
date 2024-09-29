@@ -5,19 +5,32 @@ import json
 import sys
 import threading
 
-# Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agents.model_loader import llm_model
+from agents.model_loader import get_llm
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class DeveloperAgent:
-    def __init__(self):
+    def __init__(self, model_type):
         self.tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tasks')
         self.lock = threading.Lock()
+        self.model_type = model_type
+        self.llm_model = self.load_model()
+
+    def load_model(self):
+        # Load configuration
+        config = {
+            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
+            'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
+            'HUGGINGFACE_MODEL_NAME': os.getenv('HUGGINGFACE_MODEL_NAME'),
+        }
+        return get_llm(self.model_type, config)
 
     def generate_code(self, task_description):
         prompt = f"Write a Python function to {task_description}.\n\nCode:\n"
-        code_snippet = llm_model.generate(prompt)
+        code_snippet = self.llm_model.generate(prompt)
         return code_snippet
 
     def work_on_task(self, task_id):

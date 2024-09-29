@@ -4,8 +4,8 @@ import os
 import json
 import sys
 import threading
+import shutil
 
-# Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class DevOpsAgent:
@@ -30,8 +30,7 @@ class DevOpsAgent:
             deployed_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'deployed')
             os.makedirs(deployed_dir, exist_ok=True)
             deployed_file = os.path.join(deployed_dir, f"{task_id}_code.py")
-            with open(code_file, 'r') as src, open(deployed_file, 'w') as dst:
-                dst.write(src.read())
+            shutil.copyfile(code_file, deployed_file)
 
             # Update task status
             task['status'] = 'deployed'

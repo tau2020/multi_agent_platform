@@ -12,7 +12,11 @@ class HuggingFaceLLM(LLMInterface):
         self.model.to(self.device)
 
     def generate(self, prompt):
-        inputs = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
-        outputs = self.model.generate(inputs, max_length=500, temperature=0.7)
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return generated_text[len(prompt):].strip()
+        try:
+            inputs = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+            outputs = self.model.generate(inputs, max_length=inputs.shape[1]+500, temperature=0.7)
+            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            return generated_text[len(prompt):].strip()
+        except Exception as e:
+            print(f"HuggingFace LLM error: {e}")
+            return ""
