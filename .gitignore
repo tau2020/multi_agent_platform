@@ -97,8 +97,12 @@ cython_debug/
 .vscode/
 
 
+
 #credentials
 .git-credentials
 
 # Specific to your project
 multi_agent_env/
+
+#deployed folders
+deployed/
