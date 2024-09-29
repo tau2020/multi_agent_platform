@@ -28,31 +28,41 @@ class TesterAgent:
         }
         return get_llm(self.model_type, config)
 
-    def generate_tests(self, code_content):
-        prompt = f"Write unit tests for the following Python code:\n\n{code_content}\n\nUnit Tests:"
+    def generate_tests(self, code_content, programming_language):
+        prompt = (
+            f"Write unit tests for the following {programming_language} code using an appropriate testing framework.\n\n"
+            f"Code:\n{code_content}\n\n"
+            "Ensure that the tests are comprehensive and do not include any print statements except those required by the testing framework."
+        )
         tests = self.llm_model.generate(prompt)
         return tests
 
     def test_task(self, task_id):
         task_file = os.path.join(self.tasks_dir, f"{task_id}_task.json")
-        code_file = os.path.join(self.tasks_dir, f"{task_id}_code.py")
+        programming_language = 'Python'  # Default programming language
         with self.lock:
-            if not os.path.exists(task_file) or not os.path.exists(code_file):
-                return f"Tester: Task {task_id} not found or code not available."
+            if not os.path.exists(task_file):
+                return f"Tester: Task {task_id} not found."
 
             with open(task_file, 'r') as f:
                 task = json.load(f)
             if task['status'] != 'reviewed':
                 return f"Tester: Task {task_id} status is '{task['status']}'. Skipping."
 
+            programming_language = task['original_input'].get('programming_language', 'Python')
+            extension = 'py' if programming_language.lower() == 'python' else 'txt'
+            code_file = os.path.join(self.tasks_dir, f"{task_id}_code.{extension}")
+            if not os.path.exists(code_file):
+                return f"Tester: Code file for Task {task_id} not found."
+
             print(f"Tester is testing Task ID: {task_id}")
             with open(code_file, 'r') as f:
                 code_content = f.read()
 
-            tests = self.generate_tests(code_content)
+            tests = self.generate_tests(code_content, programming_language)
 
             # Save the tests
-            test_file = os.path.join(self.tasks_dir, f"{task_id}_test.py")
+            test_file = os.path.join(self.tasks_dir, f"{task_id}_test.{extension}")
             with open(test_file, 'w') as f:
                 f.write(tests)
 

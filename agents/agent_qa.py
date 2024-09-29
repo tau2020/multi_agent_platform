@@ -28,31 +28,42 @@ class QAAgent:
         }
         return get_llm(self.model_type, config)
 
-    def review_code(self, code_content):
-        prompt = f"Review the following Python code for any issues and provide suggestions:\n\n{code_content}\n\nReview:"
+    def review_code(self, code_content, programming_language):
+        prompt = (
+            f"As a code reviewer, please review the following {programming_language} code for any issues and provide suggestions for improvement.\n\n"
+            f"Code:\n{code_content}\n\n"
+            "Provide your feedback as comments within the code where appropriate, "
+            "and include an overall summary at the end. Do not include any print statements."
+        )
         review = self.llm_model.generate(prompt)
         return review
 
     def review_task(self, task_id):
         task_file = os.path.join(self.tasks_dir, f"{task_id}_task.json")
-        code_file = os.path.join(self.tasks_dir, f"{task_id}_code.py")
+        programming_language = 'Python'  # Default programming language
         with self.lock:
-            if not os.path.exists(task_file) or not os.path.exists(code_file):
-                return f"QA: Task {task_id} not found or code not developed."
+            if not os.path.exists(task_file):
+                return f"QA: Task {task_id} not found."
 
             with open(task_file, 'r') as f:
                 task = json.load(f)
             if task['status'] != 'developed':
                 return f"QA: Task {task_id} status is '{task['status']}'. Skipping."
 
+            programming_language = task['original_input'].get('programming_language', 'Python')
+            extension = 'py' if programming_language.lower() == 'python' else 'txt'
+            code_file = os.path.join(self.tasks_dir, f"{task_id}_code.{extension}")
+            if not os.path.exists(code_file):
+                return f"QA: Code file for Task {task_id} not found."
+
             print(f"QA is reviewing Task ID: {task_id}")
             with open(code_file, 'r') as f:
                 code_content = f.read()
 
-            review = self.review_code(code_content)
+            review = self.review_code(code_content, programming_language)
 
             # Save the review
-            review_file = os.path.join(self.tasks_dir, f"{task_id}_review.txt")
+            review_file = os.path.join(self.tasks_dir, f"{task_id}_code_review.{extension}")
             with open(review_file, 'w') as f:
                 f.write(review)
 

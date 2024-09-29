@@ -28,8 +28,13 @@ class DeveloperAgent:
         }
         return get_llm(self.model_type, config)
 
-    def generate_code(self, task_description):
-        prompt = f"Write a Python function to {task_description}.\n\nCode:\n"
+    def generate_code(self, task_description, programming_language):
+        prompt = (
+            f"Write clean, well-documented {programming_language} code to accomplish the following task:\n\n"
+            f"{task_description}\n\n"
+            "Ensure that the code contains necessary comments explaining key parts, "
+            "but do not include any print statements or console outputs that are not part of the core functionality."
+        )
         code_snippet = self.llm_model.generate(prompt)
         return code_snippet
 
@@ -45,10 +50,12 @@ class DeveloperAgent:
                 return f"Developer: Task {task_id} status is '{task['status']}'. Skipping."
 
             print(f"Developer is working on Task ID: {task_id}")
-            code = self.generate_code(task['description'])
+            programming_language = task['original_input'].get('programming_language', 'Python')
+            code = self.generate_code(task['description'], programming_language)
 
             # Save the generated code
-            code_file = os.path.join(self.tasks_dir, f"{task_id}_code.py")
+            extension = 'py' if programming_language.lower() == 'python' else 'txt'
+            code_file = os.path.join(self.tasks_dir, f"{task_id}_code.{extension}")
             with open(code_file, 'w') as f:
                 f.write(code)
 
