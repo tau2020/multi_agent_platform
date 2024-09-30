@@ -1,26 +1,21 @@
-# agents/agent_developer.py
-
+import asyncio
+import logging
 import os
-import json
-import sys
-import threading
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from agents.model_loader import get_llm
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class DeveloperAgent:
-    def __init__(self, model_type):
-        self.tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tasks')
-        self.lock = threading.Lock()
+    def __init__(self, agent_id, input_queue, output_queue, model_type='openai'):
+        self.agent_id = agent_id
+        self.input_queue = input_queue
+        self.output_queue = output_queue
         self.model_type = model_type
         self.llm_model = self.load_model()
+        self.logger = logging.getLogger(f'DeveloperAgent-{self.agent_id}')
 
     def load_model(self):
-        # Load configuration
         config = {
             'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
             'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
@@ -28,40 +23,50 @@ class DeveloperAgent:
         }
         return get_llm(self.model_type, config)
 
-    def generate_code(self, task_description, programming_language):
+    async def run(self):
+        self.logger.info(f"Agent {self.agent_id} started.")
+        while True:
+            try:
+                message = await asyncio.wait_for(self.input_queue.get(), timeout=1)
+                if isinstance(message, dict):
+                    if message.get('type') == 'terminate':
+                        self.logger.info("Terminating agent.")
+                        break
+                    await self.work_on_task(message)
+                else:
+                    self.logger.warning(f"Received unexpected message type: {type(message)}")
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                self.logger.error(f"An error occurred: {e}")
+
+    async def work_on_task(self, task):
+        task_id = task.get('id')
+        description = task.get('description')
+        self.logger.info(f"Working on task: {task_id}")
+        
+        # Generate code based on the task description
+        code = await self.generate_code(description)
+        
+        # Submit the result
+        await self.submit_output(task_id, code)
+        
+        self.logger.info(f"Completed task: {task_id}")
+
+    async def generate_code(self, description):
         prompt = (
-            f"Write clean, well-documented {programming_language} code to accomplish the following task:\n\n"
-            f"{task_description}\n\n"
-            "Ensure that the code contains necessary comments explaining key parts, "
-            "but do not include any print statements or console outputs that are not part of the core functionality."
+            f"Write clean, well-documented code to accomplish the following task:\n\n"
+            f"{description}\n\n"
+            "Ensure that the code follows best practices and includes necessary comments."
         )
-        code_snippet = self.llm_model.generate(prompt)
-        return code_snippet
+        code = await asyncio.get_event_loop().run_in_executor(None, self.llm_model.generate, prompt)
+        return code
 
-    def work_on_task(self, task_id):
-        task_file = os.path.join(self.tasks_dir, f"{task_id}_task.json")
-        with self.lock:
-            if not os.path.exists(task_file):
-                return f"Developer: Task {task_id} not found."
-
-            with open(task_file, 'r') as f:
-                task = json.load(f)
-            if task['status'] != 'assigned':
-                return f"Developer: Task {task_id} status is '{task['status']}'. Skipping."
-
-            print(f"Developer is working on Task ID: {task_id}")
-            programming_language = task['original_input'].get('programming_language', 'Python')
-            code = self.generate_code(task['description'], programming_language)
-
-            # Save the generated code
-            extension = 'py' if programming_language.lower() == 'python' else 'txt'
-            code_file = os.path.join(self.tasks_dir, f"{task_id}_code.{extension}")
-            with open(code_file, 'w') as f:
-                f.write(code)
-
-            # Update task status
-            task['status'] = 'developed'
-            with open(task_file, 'w') as f:
-                json.dump(task, f, indent=2)
-
-        return f"Developer: Task {task_id} completed."
+    async def submit_output(self, task_id, code):
+        output_message = {
+            'task_id': task_id,
+            'code': code,
+            'agent_id': self.agent_id,
+            'type': 'task_completed'
+        }
+        await self.output_queue.put(output_message)
