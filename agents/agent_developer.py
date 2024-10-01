@@ -1,72 +1,115 @@
+# agents/agent_developer.py
+
 import asyncio
 import logging
-import os
-from agents.model_loader import get_llm
-from dotenv import load_dotenv
+from agents.base_agent import BaseAgent
+from typing import Dict, Any
 
-load_dotenv()
+class DeveloperAgent(BaseAgent):
+    def __init__(self, agent_id: str, input_queue: asyncio.Queue, output_queue: asyncio.Queue, llm: Any, role: str = 'developer'):
+        super().__init__(agent_id, input_queue, output_queue)
+        self.llm = llm
+        self.role = role
+        self.logger = logging.getLogger(f'DeveloperAgent-{self.role}-{self.agent_id}')
 
-class DeveloperAgent:
-    def __init__(self, agent_id, input_queue, output_queue, model_type='openai'):
-        self.agent_id = agent_id
-        self.input_queue = input_queue
-        self.output_queue = output_queue
-        self.model_type = model_type
-        self.llm_model = self.load_model()
-        self.logger = logging.getLogger(f'DeveloperAgent-{self.agent_id}')
+    async def work_on_task(self, task: Dict[str, Any]) -> str:
+        self.logger.info(f"Working on task: {task['id']} with role: {self.role}")
+        if self.role == 'function_definer':
+            content = await self.define_function(task['description'])
+        elif self.role == 'logic_implementer':
+            content = await self.implement_logic(task['description'])
+        elif self.role == 'tester':
+            content = await self.test_function(task['description'])
+        elif self.role == 'documenter':
+            content = await self.document_function(task['description'])
+        else:
+            content = await self.generate_code(task['description'])
+        await self.submit_output(task['id'], content)
+        self.logger.info(f"Completed task: {task['id']} with role: {self.role}")
+        return content
 
-    def load_model(self):
-        config = {
-            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
-            'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY'),
-            'HUGGINGFACE_MODEL_NAME': os.getenv('HUGGINGFACE_MODEL_NAME'),
-        }
-        return get_llm(self.model_type, config)
-
-    async def run(self):
-        self.logger.info(f"Agent {self.agent_id} started.")
-        while True:
-            try:
-                message = await asyncio.wait_for(self.input_queue.get(), timeout=1)
-                if isinstance(message, dict):
-                    if message.get('type') == 'terminate':
-                        self.logger.info("Terminating agent.")
-                        break
-                    await self.work_on_task(message)
-                else:
-                    self.logger.warning(f"Received unexpected message type: {type(message)}")
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                self.logger.error(f"An error occurred: {e}")
-
-    async def work_on_task(self, task):
-        task_id = task.get('id')
-        description = task.get('description')
-        self.logger.info(f"Working on task: {task_id}")
+    async def define_function(self, description: str) -> str:
+        prompt = f"""
+        Define a function for the following task:
         
-        # Generate code based on the task description
-        code = await self.generate_code(description)
+        Task: {description}
         
-        # Submit the result
-        await self.submit_output(task_id, code)
+        Provide a function signature with appropriate parameters.
+        """
+        try:
+            code = await asyncio.get_event_loop().run_in_executor(None, self.llm.generate, prompt)
+            if not code.strip():
+                raise ValueError("LLM returned an empty response")
+            return code
+        except Exception as e:
+            self.logger.error(f"Failed to define function: {e}")
+            raise
+
+    async def implement_logic(self, description: str) -> str:
+        prompt = f"""
+        Implement the logic for the following function:
         
-        self.logger.info(f"Completed task: {task_id}")
+        Task: {description}
+        
+        Write the body of the function to perform the required operation.
+        """
+        try:
+            code = await asyncio.get_event_loop().run_in_executor(None, self.llm.generate, prompt)
+            if not code.strip():
+                raise ValueError("LLM returned an empty response")
+            return code
+        except Exception as e:
+            self.logger.error(f"Failed to implement logic: {e}")
+            raise
 
-    async def generate_code(self, description):
-        prompt = (
-            f"Write clean, well-documented code to accomplish the following task:\n\n"
-            f"{description}\n\n"
-            "Ensure that the code follows best practices and includes necessary comments."
-        )
-        code = await asyncio.get_event_loop().run_in_executor(None, self.llm_model.generate, prompt)
-        return code
+    async def test_function(self, description: str) -> str:
+        prompt = f"""
+        Write test cases for the following function:
+        
+        Task: {description}
+        
+        Ensure to cover edge cases and typical usage scenarios.
+        """
+        try:
+            tests = await asyncio.get_event_loop().run_in_executor(None, self.llm.generate, prompt)
+            if not tests.strip():
+                raise ValueError("LLM returned an empty response")
+            return tests
+        except Exception as e:
+            self.logger.error(f"Failed to write tests: {e}")
+            raise
 
-    async def submit_output(self, task_id, code):
-        output_message = {
-            'task_id': task_id,
-            'code': code,
-            'agent_id': self.agent_id,
-            'type': 'task_completed'
-        }
-        await self.output_queue.put(output_message)
+    async def document_function(self, description: str) -> str:
+        prompt = f"""
+        Document the following function:
+        
+        Task: {description}
+        
+        Provide docstrings and inline comments explaining the purpose and functionality.
+        """
+        try:
+            documentation = await asyncio.get_event_loop().run_in_executor(None, self.llm.generate, prompt)
+            if not documentation.strip():
+                raise ValueError("LLM returned an empty response")
+            return documentation
+        except Exception as e:
+            self.logger.error(f"Failed to document function: {e}")
+            raise
+
+    async def generate_code(self, description: str) -> str:
+        prompt = f"""
+        Write clean, well-documented code to accomplish the following task:
+        
+        {description}
+        
+        Ensure that the code follows best practices and includes necessary comments.
+        Wrap the code in a deployable function or class.
+        """
+        try:
+            code = await asyncio.get_event_loop().run_in_executor(None, self.llm.generate, prompt)
+            if not code.strip():
+                raise ValueError("LLM returned an empty response")
+            return code
+        except Exception as e:
+            self.logger.error(f"Failed to generate code: {e}")
+            raise

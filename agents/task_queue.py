@@ -1,48 +1,48 @@
 # agents/task_queue.py
 
-import queue
-import threading
-from typing import Callable
+import asyncio
+import logging
+from typing import Callable, Any
 
 class TaskQueue:
     def __init__(self):
-        self.task_queue = queue.Queue()
-        self.result_queue = queue.Queue()
+        self.task_queue = asyncio.Queue()
+        self.result_queue = asyncio.Queue()
         self.workers = []
-        self.stop_event = threading.Event()
+        self.stop_event = asyncio.Event()
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-    def add_task(self, task: Callable, *args, **kwargs):
-        self.task_queue.put((task, args, kwargs))
+    async def add_task(self, task: Callable[..., Any], *args, **kwargs):
+        await self.task_queue.put((task, args, kwargs))
 
-    def get_result(self):
-        return self.result_queue.get()
+    async def get_result(self):
+        return await self.result_queue.get()
 
-    def worker(self):
+    async def worker(self, worker_id: int):
         while not self.stop_event.is_set():
             try:
-                task, args, kwargs = self.task_queue.get(timeout=1)
-                result = task(*args, **kwargs)
-                self.result_queue.put(result)
+                task, args, kwargs = await asyncio.wait_for(self.task_queue.get(), timeout=1)
+                if asyncio.iscoroutinefunction(task):
+                    result = await task(*args, **kwargs)
+                else:
+                    result = task(*args, **kwargs)
+                await self.result_queue.put(result)
                 self.task_queue.task_done()
-            except queue.Empty:
+            except asyncio.TimeoutError:
                 continue
             except Exception as e:
-                print(f"An error occurred in worker: {e}")
+                self.logger.error(f"An error occurred in worker {worker_id}: {e}")
                 self.task_queue.task_done()
 
-    def start_workers(self, num_workers: int):
-        for _ in range(num_workers):
-            t = threading.Thread(target=self.worker)
-            t.start()
-            self.workers.append(t)
+    async def start_workers(self, num_workers: int):
+        for i in range(num_workers):
+            task = asyncio.create_task(self.worker(i))
+            self.workers.append(task)
 
-    def stop_workers(self):
+    async def stop_workers(self):
         self.stop_event.set()
-        for worker in self.workers:
-            worker.join()
+        await asyncio.gather(*self.workers, return_exceptions=True)
         self.workers.clear()
 
-    def wait_completion(self):
-        self.task_queue.join()
-
-task_queue = TaskQueue()
+    async def wait_completion(self):
+        await self.task_queue.join()
